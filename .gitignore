@@ -1,2 +1,4 @@
 # Ignorer le dossier logs
 airflow/logs/
+
+.env
