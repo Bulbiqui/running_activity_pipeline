@@ -5,6 +5,8 @@ import requests
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
+from io import StringIO
+from airflow.hooks.S3_hook import S3Hook
 
 import endpoints
 from env_handler import env_variables
@@ -64,9 +66,24 @@ def preprocess_and_save_data(**kwargs):
     data = ti.xcom_pull(task_ids='access_activity_data', key='activity_data')
     df = pd.json_normalize(data)
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    output_path = Path('../../../',f'my_activity_data_{timestamp}.csv').resolve()
-    df.to_csv(output_path, index=False)
-    print(output_path)
+    file_name = f'my_activity_data_{timestamp}.csv'
+    csv_buffer = StringIO()
+    df.to_csv(csv_buffer, index=False)
+    ti.xcom_push(key='file_name', value=file_name)
+    ti.xcom_push(key='csv_data', value=csv_buffer.getvalue())
+    print(f'Data prepared to be saved as {file_name}')
+
+def upload_to_s3(**kwargs):
+    ti = kwargs['ti']
+    file_name = ti.xcom_pull(task_ids='preprocess_and_save_data', key='file_name')
+    csv_data = ti.xcom_pull(task_ids='preprocess_and_save_data', key='csv_data')
+    s3_bucket = 'running-activity-aog'
+    s3_key = f'{file_name}'
+
+    s3_hook = S3Hook(aws_conn_id='S3amazon')
+    s3_hook.load_string(string_data=csv_data, key=s3_key, bucket_name=s3_bucket, replace=True)
+    print(f'File {file_name} uploaded to S3 bucket {s3_bucket} with key {s3_key}')
+
 
 with dag:
     get_access_token_task = PythonOperator(
@@ -86,4 +103,10 @@ with dag:
         provide_context=True,
     )
 
-get_access_token_task >> access_activity_data_task >> preprocess_and_save_data_task
+    upload_to_s3_task = PythonOperator(
+        task_id='upload_to_s3',
+        python_callable=upload_to_s3,
+        provide_context=True,
+    )
+
+get_access_token_task >> access_activity_data_task >> preprocess_and_save_data_task >> upload_to_s3_task
