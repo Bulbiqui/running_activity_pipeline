@@ -53,7 +53,7 @@ def get_access_token():
 def access_activity_data(**kwargs):
     ti = kwargs['ti']
     access_token = ti.xcom_pull(task_ids='get_access_token')
-    headers = {f'Authorization: Bearer {access_token}'}
+    headers = {'Authorization': f'Bearer {access_token}'}
     response = requests.get(endpoints.activites_endpoint, headers=headers, params=GET_ALL_ACTIVITIES_PARAMS)
     response.raise_for_status()
     activity_data = response.json()
@@ -64,8 +64,9 @@ def preprocess_and_save_data(**kwargs):
     data = ti.xcom_pull(task_ids='access_activity_data', key='activity_data')
     df = pd.json_normalize(data)
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    output_path = Path(f'my_activity_data_{timestamp}.csv')
+    output_path = Path('../../../',f'my_activity_data_{timestamp}.csv').resolve()
     df.to_csv(output_path, index=False)
+    print(output_path)
 
 with dag:
     get_access_token_task = PythonOperator(
