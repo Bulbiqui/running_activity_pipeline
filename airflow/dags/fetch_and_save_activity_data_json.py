@@ -19,7 +19,7 @@ default_args = {
 }
 
 dag = DAG(
-    'fetch_and_save_activity_data',
+    'fetch_and_save_activity_data_json',
     default_args=default_args,
     description= 'Fetch activity data and save to CSV',
     schedule_interval='@daily',
