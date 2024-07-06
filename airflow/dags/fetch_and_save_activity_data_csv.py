@@ -27,9 +27,8 @@ dag = DAG(
     catchup=False
 )
 
-# used to f.e set the limit of fetched activities (default - 30)
-ACTIVITIES_PER_PAGE = 200
-# current page number with activities
+# Nombre d'activité à récupérer
+ACTIVITIES_PER_PAGE = 300
 PAGE_NUMBER = 1
 
 GET_ALL_ACTIVITIES_PARAMS = {
@@ -37,9 +36,8 @@ GET_ALL_ACTIVITIES_PARAMS = {
     'page': PAGE_NUMBER
 }
 
+# Récupération du jeton d'accès à l'api strava
 def get_access_token():
-    # these params needs to be passed to get access
-    # token used for retrieveing actual data
     payload:dict = {
     'client_id': env_variables['CLIENT_ID'],
     'client_secret': env_variables['CLIENT_SECRET'],
@@ -52,6 +50,7 @@ def get_access_token():
     access_token = res.json()['access_token']
     return access_token
 
+# Récupération des données d'activité au format json
 def access_activity_data(**kwargs):
     ti = kwargs['ti']
     access_token = ti.xcom_pull(task_ids='get_access_token')
@@ -61,6 +60,7 @@ def access_activity_data(**kwargs):
     activity_data = response.json()
     ti.xcom_push(key='activity_data', value=activity_data)
 
+# Transformation du fichier json en csv
 def preprocess_and_save_data(**kwargs):
     ti = kwargs['ti']
     data = ti.xcom_pull(task_ids='access_activity_data', key='activity_data')
@@ -73,6 +73,7 @@ def preprocess_and_save_data(**kwargs):
     ti.xcom_push(key='csv_data', value=csv_buffer.getvalue())
     print(f'Data prepared to be saved as {file_name}')
 
+# Upload du fichier csv dans le s3 bucket
 def upload_to_s3(**kwargs):
     ti = kwargs['ti']
     file_name = ti.xcom_pull(task_ids='preprocess_and_save_data', key='file_name')

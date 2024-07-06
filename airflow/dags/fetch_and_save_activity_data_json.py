@@ -27,9 +27,8 @@ dag = DAG(
     catchup=False
 )
 
-# used to f.e set the limit of fetched activities (default - 30)
-ACTIVITIES_PER_PAGE = 200
-# current page number with activities
+# Nombre d'activité à récupérer
+ACTIVITIES_PER_PAGE = 300
 PAGE_NUMBER = 1
 
 GET_ALL_ACTIVITIES_PARAMS = {
@@ -37,9 +36,8 @@ GET_ALL_ACTIVITIES_PARAMS = {
     'page': PAGE_NUMBER
 }
 
+# Récupération du jeton d'accès à l'api strava
 def get_access_token():
-    # these params needs to be passed to get access
-    # token used for retrieveing actual data
     payload:dict = {
     'client_id': env_variables['CLIENT_ID'],
     'client_secret': env_variables['CLIENT_SECRET'],
@@ -52,6 +50,7 @@ def get_access_token():
     access_token = res.json()['access_token']
     return access_token
 
+# Récupération des données d'activité au format json
 def access_activity_data(**kwargs):
     ti = kwargs['ti']
     access_token = ti.xcom_pull(task_ids='get_access_token')
@@ -61,27 +60,18 @@ def access_activity_data(**kwargs):
     activity_data = response.json()
     ti.xcom_push(key='activity_data', value=activity_data)
 
-def preprocess_and_save_data(**kwargs):
-    ti = kwargs['ti']
-    data = ti.xcom_pull(task_ids='access_activity_data', key='activity_data')
-    df = pd.json_normalize(data)
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    file_name = f'my_activity_data_{timestamp}.csv'
-    csv_buffer = StringIO()
-    df.to_csv(csv_buffer, index=False)
-    ti.xcom_push(key='file_name', value=file_name)
-    ti.xcom_push(key='csv_data', value=csv_buffer.getvalue())
-    print(f'Data prepared to be saved as {file_name}')
-
+# Upload du fichier json dans le s3 bucket
 def upload_to_s3(**kwargs):
     ti = kwargs['ti']
-    file_name = ti.xcom_pull(task_ids='preprocess_and_save_data', key='file_name')
-    csv_data = ti.xcom_pull(task_ids='preprocess_and_save_data', key='csv_data')
+    activity_data = ti.xcom_pull(task_ids='access_activity_data', key='activity_data')
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    file_name = f'my_activity_data_{timestamp}.json'
+    
     s3_bucket = 'running-activity-aog'
     s3_key = f'{file_name}'
-
+    
     s3_hook = S3Hook(aws_conn_id='S3amazon')
-    s3_hook.load_string(string_data=csv_data, key=s3_key, bucket_name=s3_bucket, replace=True)
+    s3_hook.load_string(string_data=str(activity_data), key=s3_key, bucket_name=s3_bucket, replace=True)
     print(f'File {file_name} uploaded to S3 bucket {s3_bucket} with key {s3_key}')
 
 
@@ -97,16 +87,10 @@ with dag:
         provide_context=True,
     )
 
-    preprocess_and_save_data_task = PythonOperator(
-        task_id='preprocess_and_save_data',
-        python_callable=preprocess_and_save_data,
-        provide_context=True,
-    )
-
     upload_to_s3_task = PythonOperator(
         task_id='upload_to_s3',
         python_callable=upload_to_s3,
         provide_context=True,
     )
 
-get_access_token_task >> access_activity_data_task >> preprocess_and_save_data_task >> upload_to_s3_task
+get_access_token_task >> access_activity_data_task >> upload_to_s3_task

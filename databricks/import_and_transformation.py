@@ -83,9 +83,11 @@ activity_data_created_df = activity_data_transformed_df.withColumn("allure_min_k
 
 # ------------------------ Test des tables temporaires   ------------------------
 '''
+
+# Création de la table temporaire à partir du dataframe
 activity_data_created_df.createOrReplaceTempView("activity_data")
 
-# Vous pouvez maintenant interroger la table temporaire comme une table SQL
+# Requete SQL sur la table temporaire
 spark.sql("SELECT name, start_date, distance_km, elapsed_time_min FROM activity_data").show()
 
 
