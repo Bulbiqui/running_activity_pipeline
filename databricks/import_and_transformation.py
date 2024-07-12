@@ -32,7 +32,7 @@ if mount_name not in mounts:
 
 # Liste des fichiers dans le S3 avec le prefix voulu
 prefix_fichiers = "my_activity_data"
-fichiers = [file for file in dbutils.fs.ls(mount_name) if file.name.startswith(prefix_fichiers)]
+fichiers = [file for file in dbutils.fs.ls(mount_name) if file.name.startswith(prefix_fichiers) and file.name.endswith('.csv')]
 
 # boucle for afin de récupérer le fichier le plus récent
 dernier_timestamp = None
@@ -119,6 +119,12 @@ only showing top 20 rows
 
 '''
 # ------------------------ Export du fichier dans le S3 transformed ------------------------
+
+# Chemin du fichier de sortie
+output_path = f"dbfs:/mnt/running-activity-aog/transformed_activity_data_final"
+
+# Écrire le DataFrame en CSV dans le S3
+activity_data_created_df.write.csv(output_path, header=True, mode='overwrite')
 
 
 # ------------------------------------------------------------------------------------------
